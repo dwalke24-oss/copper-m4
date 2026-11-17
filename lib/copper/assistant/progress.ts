@@ -40,4 +40,10 @@ export const TOOL_LABELS: Record<string, string> = {
   calculate_cost: "Working out the cost",
   check_availability: "Checking stock",
   search_docs: "Searching the documents",
+  lookup_order: "Finding the order",
+  request_refund: "Asking the Refund agent",
+  check_refund_status: "Checking the refund",
 };
+
+/** The tools that change refunds, so the Refund Console knows to refresh. */
+export const REFUND_TOOLS = ["request_refund"];

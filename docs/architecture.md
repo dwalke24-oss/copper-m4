@@ -139,3 +139,45 @@ second agent, and a person approving the large ones.
 |---|---|---|
 | Page | `app/support/page.tsx` | The "Refund Console" title and nothing else yet, linked from the header as Support |
 | Chat panel | `components/copper/ask-copper.tsx` | With the `docked` prop it starts open and the page beside it stays clickable. It is the same single agent and tools as on the home page |
+
+## Module 4: Refunds with two agents and a person
+
+**Summary:** Customers ask Ask Copper (the Support agent) for a refund in the
+chat. Copper finds the order, then hands the case to a second agent, the
+Refund agent. Plain-code refund rules decide: refunded now, not eligible, or
+waiting on the Refund Console for a person on the Copper Crew to Approve or
+Reject. The auto-refund limit is set on the console.
+
+| Piece | Where | What it does |
+|---|---|---|
+| Page | `app/support/page.tsx`, `components/copper/refund-console.tsx`, `components/copper/refund-queue.tsx` | The Refund Console: the auto-refund limit, refunds waiting for Approve / Reject (with the customer's words, the Refund agent's note and the rule), everything decided, and the demo orders. Redraws when Copper files a refund in the docked chat |
+| Server Actions | `lib/copper/refunds/actions.ts` | `approveRefundAction`, `rejectRefundAction`, `setAutoRefundLimitAction`; each calls `refresh()` |
+| Support agent tools | `lib/copper/assistant/refund-tools.ts` (spread into `copperTools`) | `lookup_order`, `request_refund`, `check_refund_status`. Each needs the order's email. `request_refund` has no amount field |
+| Refund agent | `lib/copper/refunds/agent.ts` | `requestRefund()`: checks the order and items, blocks duplicates, reads the case with one `callObject` (category + a note for the Copper Crew), runs the rules, saves the request |
+| Rules | `lib/copper/refunds/policy.ts` | `decideRefund()`: devices within 30 days, annual Copper Plus within 14, monthly never; outage or bug claims always go to a person; total (plus what's already refunded on the order) up to the limit is automatic |
+| Limit | `lib/copper/refunds/config.ts` | Console value, else `REFUND_AUTO_LIMIT_USD`, else $100. 0 means every refund needs a person |
+| Data | `lib/copper/data/orders.json`, `lib/copper/orders.ts`, `lib/copper/refunds/store.ts` | Six fictional orders (purchase dates are "days ago", so they never age out). Refund requests and the console's limit, in server memory |
+| AI calls | `{ module: 4, feature: "refund-agent" }` | One small structured call per refund request, plus the usual `ask-copper` streamed call |
+
+**Data flow:** customer asks in the chat → Ask Copper calls `lookup_order` →
+`request_refund` → Refund agent reads the case (model) → `decideRefund` (code)
+→ saved as auto-refunded, not eligible, or waiting → the console redraws → a
+person presses Approve or Reject → the customer asks Copper, which calls
+`check_refund_status`.
+
+**Decisions and trade-offs:** The model talks and describes; code decides.
+The Refund agent's model call only picks a reason category and writes a note.
+The amount comes from the order and the outcome from the rules, so a customer
+can't argue or prompt-inject a bigger refund. If that call fails the request is
+still decided, filed as "other". The limit counts what's already refunded on
+the order, so splitting a refund into small pieces can't slip under it.
+Approve / Reject only change a waiting request, so a double click can't decide
+it twice. We used a staff page rather than the AI SDK's tool approval, because
+that asks the person in the chat, and here the approver is the Copper Crew.
+
+**Risks and open questions:** No sign-in yet, so anyone who opens `/support`
+can approve refunds; that needs the later auth module before real money.
+Requests live in server memory: they reset on restart, and on Vercel separate
+instances don't share them, so a real deployment needs a `refund_requests`
+table (only `store.ts` changes). No money actually moves; "refunded" means the
+request is approved.

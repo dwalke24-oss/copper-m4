@@ -30,7 +30,8 @@ export default function RootLayout({ children }: LayoutProps<"/">) {
           disableTransitionOnChange
         >
           <TooltipProvider>{children}</TooltipProvider>
-          <Toaster />
+          {/* Top center, so toasts never cover the docked chat's input. */}
+          <Toaster position="top-center" />
         </ThemeProvider>
       </body>
     </html>

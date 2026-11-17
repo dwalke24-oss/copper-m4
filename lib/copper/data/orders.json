@@ -1,0 +1,109 @@
+{
+  "_note": "Fictional demo orders for the Refund Console. daysAgo is turned into a purchase date relative to today (lib/copper/orders.ts), so the demo orders never age out of their refund windows.",
+  "orders": [
+    {
+      "orderId": "CSL-1001",
+      "email": "maria.lopez@example.com",
+      "customerName": "Maria Lopez",
+      "daysAgo": 10,
+      "lines": [
+        {
+          "lineId": "CSL-1001-1",
+          "kind": "device",
+          "productId": "copper-notes",
+          "name": "Copper Notes",
+          "color": "Desert Sand",
+          "priceUsd": 129
+        }
+      ]
+    },
+    {
+      "orderId": "CSL-1002",
+      "email": "sam.whitehorse@example.com",
+      "customerName": "Sam Whitehorse",
+      "daysAgo": 5,
+      "lines": [
+        {
+          "lineId": "CSL-1002-1",
+          "kind": "plan",
+          "planId": "copper-plus",
+          "name": "Copper Plus",
+          "billing": "monthly",
+          "priceUsd": 7.99
+        }
+      ]
+    },
+    {
+      "orderId": "CSL-1003",
+      "email": "priya.shah@example.com",
+      "customerName": "Priya Shah",
+      "daysAgo": 6,
+      "lines": [
+        {
+          "lineId": "CSL-1003-1",
+          "kind": "plan",
+          "planId": "copper-plus",
+          "name": "Copper Plus",
+          "billing": "annual",
+          "priceUsd": 79
+        }
+      ]
+    },
+    {
+      "orderId": "CSL-1004",
+      "email": "jordan.begay@example.com",
+      "customerName": "Jordan Begay",
+      "daysAgo": 45,
+      "lines": [
+        {
+          "lineId": "CSL-1004-1",
+          "kind": "device",
+          "productId": "copper-home",
+          "name": "Copper Home",
+          "color": "Polished Copper",
+          "priceUsd": 149
+        }
+      ]
+    },
+    {
+      "orderId": "CSL-1005",
+      "email": "alex.kim@example.com",
+      "customerName": "Alex Kim",
+      "daysAgo": 3,
+      "lines": [
+        {
+          "lineId": "CSL-1005-1",
+          "kind": "device",
+          "productId": "copper-home",
+          "name": "Copper Home",
+          "color": "Night Sky",
+          "priceUsd": 149
+        },
+        {
+          "lineId": "CSL-1005-2",
+          "kind": "device",
+          "productId": "copper-notes",
+          "name": "Copper Notes",
+          "color": "Night Sky",
+          "priceUsd": 129
+        }
+      ]
+    },
+    {
+      "orderId": "CSL-1006",
+      "email": "lee.nguyen@example.com",
+      "customerName": "Lee Nguyen",
+      "daysAgo": 20,
+      "lines": [
+        {
+          "lineId": "CSL-1006-1",
+          "kind": "plan",
+          "planId": "copper-plus",
+          "name": "Copper Plus",
+          "billing": "annual",
+          "priceUsd": 79
+        }
+      ]
+    }
+  ]
+}

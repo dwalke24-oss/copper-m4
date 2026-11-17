@@ -31,6 +31,7 @@ import { askCopper, type ChatMessage } from "@/lib/copper/assistant/ask";
 import { splitCitations } from "@/lib/copper/assistant/citations";
 import {
   type Progress,
+  REFUND_TOOLS,
   type ToolStep,
   TOOL_LABELS,
 } from "@/lib/copper/assistant/progress";
@@ -42,6 +43,17 @@ const STARTERS = [
   "Is Copper Notes in Night Sky in stock?",
   "Is Copper Plus cheaper monthly or yearly?",
 ];
+
+// On the Support page (the Refund Console), the starters are refund requests
+// on the demo orders in lib/copper/data/orders.json.
+const REFUND_STARTERS = [
+  "I'd like a refund for my Copper Plus. Order CSL-1003, priya.shah@example.com. I'm not using it.",
+  "Please refund my Copper Notes, order CSL-1001, maria.lopez@example.com. It doesn't fit my routine.",
+  "What's your refund policy for Copper Plus?",
+];
+
+/** Fired on window when Copper files a refund, so the Refund Console can refresh. */
+export const REFUNDS_CHANGED_EVENT = "copper:refunds-changed";
 
 type Turn = { question: string; progress: Progress };
 type Chats = { tools: Turn[]; noTools: Turn[] };
@@ -116,7 +128,18 @@ export function AskCopper({
         messages,
         useTools: chat === "tools",
       });
-      for await (const update of readLive(progress)) setProgress(update);
+      let last: Progress | undefined;
+      for await (const update of readLive(progress)) {
+        setProgress(update);
+        last = update;
+      }
+      const filedRefund = last?.steps.some(
+        (step) =>
+          step.type === "tool" &&
+          step.state === "done" &&
+          REFUND_TOOLS.includes(step.name),
+      );
+      if (filedRefund) window.dispatchEvent(new Event(REFUNDS_CHANGED_EVENT));
     } catch {
       setProgress({
         steps: [],
@@ -206,11 +229,12 @@ export function AskCopper({
                   <div className="space-y-2">
                     {turns.length === 0 && (
                       <p className="text-muted-foreground text-sm">
-                        Hi, I&apos;m Copper! Ask me about prices, totals or
-                        stock. Try one of these:
+                        {docked
+                          ? "Hi, I'm Copper! I can help with an order or a refund. Try one of these:"
+                          : "Hi, I'm Copper! Ask me about prices, totals or stock. Try one of these:"}
                       </p>
                     )}
-                    {STARTERS.map((starter) => (
+                    {(docked ? REFUND_STARTERS : STARTERS).map((starter) => (
                       <button
                         key={starter}
                         type="button"
@@ -656,6 +680,71 @@ function ToolOutput({ name, output }: { name: string; output: any }) {
         ))}
       </ol>
     );
+  if (name === "lookup_order" && output?.status) {
+    if (output.status !== "ok")
+      return <p className="text-xs">{output.message}</p>;
+    return (
+      <div className="space-y-1 text-xs">
+        <p className="text-muted-foreground">
+          {output.orderId}, bought {output.purchasedAt}
+        </p>
+        {output.lines.map((line: any) => (
+          <div
+            key={line.lineId}
+            className="flex items-center justify-between gap-2"
+          >
+            <span>{line.item}</span>
+            <span className="flex items-center gap-2">
+              <span className="font-mono">{formatUsd(line.priceUsd)}</span>
+              {line.refund ? (
+                <Pill className="bg-chart-4 text-chart-5">
+                  {line.refund.referenceId}
+                </Pill>
+              ) : line.withinRefundWindow ? (
+                <Pill className="bg-accent text-white">Refundable</Pill>
+              ) : (
+                <Pill className="bg-muted text-muted-foreground">
+                  Past window
+                </Pill>
+              )}
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  }
+  if (
+    (name === "request_refund" || name === "check_refund_status") &&
+    output?.status
+  ) {
+    const status: string = output.requestStatus ?? output.status;
+    const amount = typeof output.amountUsd === "number" && (
+      <span className="font-mono">{formatUsd(output.amountUsd)}</span>
+    );
+    return (
+      <div className="space-y-2 text-xs" data-testid="refund-outcome">
+        <div className="flex items-center justify-between gap-2">
+          <RefundPill status={status} />
+          {output.referenceId && (
+            <span className="font-mono font-semibold">
+              {output.referenceId}
+            </span>
+          )}
+        </div>
+        {output.items && (
+          <div className="flex justify-between gap-2">
+            <span>{output.items.join(", ")}</span>
+            {amount}
+          </div>
+        )}
+        {(output.message || output.note) && (
+          <p className="text-muted-foreground">
+            {output.message ?? `Copper Crew: ${output.note}`}
+          </p>
+        )}
+      </div>
+    );
+  }
   // A tool without its own layout yet: show what came back as plain text.
   return (
     <pre className="max-h-48 overflow-auto text-xs whitespace-pre-wrap">
@@ -686,6 +775,24 @@ function StockPill({
   return (
     <Pill className="bg-chart-3 text-white">Back-ordered until {date}</Pill>
   );
+}
+
+const REFUND_PILLS: Record<string, [string, string]> = {
+  auto_approved: ["Refunded", "bg-accent text-white"],
+  approved: ["Approved by the Copper Crew", "bg-accent text-white"],
+  pending_review: ["Waiting for a person", "bg-chart-4 text-chart-5"],
+  rejected: ["Rejected by the Copper Crew", "bg-chart-3 text-white"],
+  denied: ["Not eligible", "bg-chart-3 text-white"],
+  already_requested: ["Already requested", "bg-chart-4 text-chart-5"],
+  unknown_items: ["Not on this order", "bg-muted text-muted-foreground"],
+};
+
+function RefundPill({ status }: { status: string }) {
+  const [label, className] = REFUND_PILLS[status] ?? [
+    "Not found",
+    "bg-muted text-muted-foreground",
+  ];
+  return <Pill className={className}>{label}</Pill>;
 }
 
 function Pill({

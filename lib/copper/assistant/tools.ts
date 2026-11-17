@@ -6,6 +6,7 @@
 import { tool } from "ai";
 import { z } from "zod";
 import { callEmbedMany } from "@/lib/ai/call";
+import { refundTools } from "@/lib/copper/assistant/refund-tools";
 import {
   getPlans,
   getProducts,
@@ -270,4 +271,6 @@ export const copperTools = {
     }),
     execute: async ({ query }) => searchDocs(query),
   }),
+  // Module 4: look up orders, file refunds with the Refund agent, check them.
+  ...refundTools,
 };
