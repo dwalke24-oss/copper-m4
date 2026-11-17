@@ -3,12 +3,11 @@
 // The Refund Console's working area (Module 4): the auto-refund limit, the
 // refunds waiting for a person to Approve or Reject, everything already
 // decided, and the demo orders to try in the chat. It redraws when Copper
-// files a refund in the docked chat.
-import { CheckIcon, XIcon } from "lucide-react";
+// files a refund in the docked chat, and checks for new ones every few seconds.
+import { CheckIcon, RefreshCwIcon, XIcon } from "lucide-react";
 import { useRouter } from "next/navigation";
 import { useEffect, useState, useTransition } from "react";
 import { toast } from "sonner";
-import { REFUNDS_CHANGED_EVENT } from "@/components/copper/ask-copper";
 import { Badge } from "@/components/ui/badge";
 import { Button } from "@/components/ui/button";
 import {
@@ -31,6 +30,11 @@ import {
 } from "@/components/ui/table";
 import { formatUsd } from "@/lib/copper/catalog";
 import {
+  CHAT_IDLE_EVENT,
+  isChatBusy,
+  REFUNDS_CHANGED_EVENT,
+} from "@/lib/copper/chat-activity";
+import {
   type ActionResult,
   approveRefundAction,
   rejectRefundAction,
@@ -38,6 +42,9 @@ import {
 } from "@/lib/copper/refunds/actions";
 import { REASON_LABELS } from "@/lib/copper/refunds/policy";
 import type { RefundRequest, RefundStatus } from "@/lib/copper/refunds/store";
+
+/** How often the console checks the server for new refunds. */
+export const REFRESH_EVERY_MS = 5000;
 
 export type DemoOrder = {
   orderId: string;
@@ -84,11 +91,36 @@ export function RefundQueue({
 }) {
   const router = useRouter();
 
-  // Copper files refunds from the docked chat: redraw when it does.
+  // Keep the console current: redraw right away when the docked chat files a
+  // refund, every few seconds while this tab is showing (refunds filed in
+  // another tab or window), and when the tab comes back into view. Never in
+  // the middle of a chat answer: redrawing then could cut Copper's answer
+  // off, so a redraw that's due waits until the chat is idle.
   useEffect(() => {
-    const refresh = () => router.refresh();
+    let due = false;
+    const refresh = () => {
+      if (isChatBusy()) {
+        due = true;
+        return;
+      }
+      due = false;
+      router.refresh();
+    };
+    const showing = () => document.visibilityState === "visible";
+    const whenShowing = () => showing() && refresh();
+    const whenIdle = () => due && refresh();
+    const timer = window.setInterval(whenShowing, REFRESH_EVERY_MS);
     window.addEventListener(REFUNDS_CHANGED_EVENT, refresh);
-    return () => window.removeEventListener(REFUNDS_CHANGED_EVENT, refresh);
+    window.addEventListener(CHAT_IDLE_EVENT, whenIdle);
+    window.addEventListener("focus", whenShowing);
+    document.addEventListener("visibilitychange", whenShowing);
+    return () => {
+      window.clearInterval(timer);
+      window.removeEventListener(REFUNDS_CHANGED_EVENT, refresh);
+      window.removeEventListener(CHAT_IDLE_EVENT, whenIdle);
+      window.removeEventListener("focus", whenShowing);
+      document.removeEventListener("visibilitychange", whenShowing);
+    };
   }, [router]);
 
   const waiting = requests.filter((r) => r.status === "pending_review");
@@ -100,12 +132,22 @@ export function RefundQueue({
       <LimitCard key={limitUsd} limitUsd={limitUsd} />
 
       <section aria-labelledby="waiting-heading" className="space-y-3">
-        <h2 id="waiting-heading" className="text-xl font-semibold">
-          Waiting for approval{" "}
-          <span className="text-muted-foreground text-base font-normal">
-            ({waiting.length})
-          </span>
-        </h2>
+        <div className="flex items-center justify-between gap-2">
+          <h2 id="waiting-heading" className="text-xl font-semibold">
+            Waiting for approval{" "}
+            <span className="text-muted-foreground text-base font-normal">
+              ({waiting.length})
+            </span>
+          </h2>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => router.refresh()}
+            title={`The console also checks for new refunds every ${REFRESH_EVERY_MS / 1000} seconds.`}
+          >
+            <RefreshCwIcon /> Refresh
+          </Button>
+        </div>
         {waiting.length === 0 ? (
           <p className="text-muted-foreground rounded-xl border border-dashed p-6 text-center text-sm">
             Nothing waiting. Refunds over {formatUsd(limitUsd)} show up here for

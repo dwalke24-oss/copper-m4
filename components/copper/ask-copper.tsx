@@ -36,6 +36,10 @@ import {
   TOOL_LABELS,
 } from "@/lib/copper/assistant/progress";
 import { formatUsd, getPlans, getProducts } from "@/lib/copper/catalog";
+import {
+  announceRefundsChanged,
+  setChatBusy,
+} from "@/lib/copper/chat-activity";
 import { cn } from "@/lib/utils";
 
 const STARTERS = [
@@ -51,9 +55,6 @@ const REFUND_STARTERS = [
   "Please refund my Copper Notes, order CSL-1001, maria.lopez@example.com. It doesn't fit my routine.",
   "What's your refund policy for Copper Plus?",
 ];
-
-/** Fired on window when Copper files a refund, so the Refund Console can refresh. */
-export const REFUNDS_CHANGED_EVENT = "copper:refunds-changed";
 
 type Turn = { question: string; progress: Progress };
 type Chats = { tools: Turn[]; noTools: Turn[] };
@@ -123,29 +124,30 @@ export function AskCopper({
       ...all,
       [chat]: [...all[chat], { question, progress: WORKING }],
     }));
+    // Remembered across updates, so the Refund Console still hears about a
+    // refund when the answer breaks off after Copper filed it.
+    let filedRefund = false;
+    setChatBusy(true);
     try {
       const { progress } = await askCopper({
         messages,
         useTools: chat === "tools",
       });
-      let last: Progress | undefined;
       for await (const update of readLive(progress)) {
         setProgress(update);
-        last = update;
+        filedRefund ||= update.steps.some(
+          (step) => step.type === "tool" && REFUND_TOOLS.includes(step.name),
+        );
       }
-      const filedRefund = last?.steps.some(
-        (step) =>
-          step.type === "tool" &&
-          step.state === "done" &&
-          REFUND_TOOLS.includes(step.name),
-      );
-      if (filedRefund) window.dispatchEvent(new Event(REFUNDS_CHANGED_EVENT));
     } catch {
       setProgress({
         steps: [],
         reply: "Sorry, I couldn't reach Copper. Please try again.",
         status: "error",
       });
+    } finally {
+      setChatBusy(false);
+      if (filedRefund) announceRefundsChanged();
     }
   }
 

@@ -21,12 +21,15 @@ vi.mock("@/lib/copper/refunds/actions", () => actions);
 const refresh = vi.fn();
 vi.mock("next/navigation", () => ({ useRouter: () => ({ refresh }) }));
 
-const { RefundQueue } = await import("@/components/copper/refund-queue");
-const { REFUNDS_CHANGED_EVENT } =
-  await import("@/components/copper/ask-copper");
+const { RefundQueue, REFRESH_EVERY_MS } =
+  await import("@/components/copper/refund-queue");
+const { announceRefundsChanged, setChatBusy } =
+  await import("@/lib/copper/chat-activity");
 
 afterEach(() => {
   cleanup();
+  setChatBusy(false);
+  vi.useRealTimers();
   vi.clearAllMocks();
 });
 
@@ -119,7 +122,34 @@ describe("Refund Console", () => {
 
   it("redraws when Copper files a refund in the chat", () => {
     renderQueue([]);
-    window.dispatchEvent(new Event(REFUNDS_CHANGED_EVENT));
-    expect(refresh).toHaveBeenCalled();
+    announceRefundsChanged();
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("checks the server every few seconds, so refunds filed in another tab show up", () => {
+    vi.useFakeTimers();
+    renderQueue([]);
+    expect(refresh).not.toHaveBeenCalled();
+    vi.advanceTimersByTime(REFRESH_EVERY_MS);
+    expect(refresh).toHaveBeenCalledTimes(1);
+    vi.advanceTimersByTime(REFRESH_EVERY_MS);
+    expect(refresh).toHaveBeenCalledTimes(2);
+  });
+
+  it("never redraws in the middle of a chat answer, and catches up when the chat is done", () => {
+    vi.useFakeTimers();
+    renderQueue([]);
+    setChatBusy(true);
+    vi.advanceTimersByTime(REFRESH_EVERY_MS * 3);
+    announceRefundsChanged();
+    expect(refresh).not.toHaveBeenCalled();
+    setChatBusy(false);
+    expect(refresh).toHaveBeenCalledTimes(1);
+  });
+
+  it("has a Refresh button", () => {
+    renderQueue([]);
+    fireEvent.click(screen.getByRole("button", { name: /Refresh/ }));
+    expect(refresh).toHaveBeenCalledTimes(1);
   });
 });
